@@ -23,7 +23,7 @@ Do not extract the firmware files named `TTArm-buildYYYYMMDDx.zip`. The updater 
 - A USB data cable
 - A TournaTest Digital test box
 
-Everything else needed for the update is included in the downloaded folder.
+The firmware updater and firmware files are included in the downloaded folder. The CP210x driver is not included and may need to be downloaded separately, as described below.
 
 ## Install the CP210x USB Driver
 
@@ -31,30 +31,29 @@ The TournaTest Digital uses a Silicon Labs CP210x USB-to-UART interface. Windows
 
 ### Install through Windows Update
 
+The CP210x driver is available from the [Microsoft Update Catalog](https://www.catalog.update.microsoft.com/Search.aspx?q=cp210x).
+
 1. Connect the test box to the computer with a USB data cable.
 2. Open **Settings**, select **Windows Update**, and click **Check for updates**.
 3. If the driver is not installed automatically, open **Advanced options** > **Optional updates** > **Driver updates**. On some versions of Windows 10, select **View optional updates** instead.
 4. Select the **Silicon Labs CP210x USB to UART Bridge** driver, install it, and then restart the computer if Windows requests it.
 5. Disconnect and reconnect the test box. Confirm that a new COM port appears in **Device Manager** under **Ports (COM & LPT)**.
 
-### Install manually from the project folder
+### Download and install the driver manually
 
-The CP210x driver files may also be installed from:
+If Windows Update does not offer the driver automatically:
 
-```text
-C:\Users\gsall\Documents\GitHub\TTArmUpdateTool
-```
-
-If you downloaded this project as a ZIP file on another computer, use the path to your extracted `TTArmUpdateTool` folder instead.
-
-1. Connect the test box to the computer.
-2. Right-click the **Start** button and select **Device Manager**.
-3. Find **CP210x USB to UART Bridge**, **USB Serial Controller**, or the unknown device with a warning symbol. It may be listed under **Other devices**.
-4. Right-click the device and select **Update driver**.
-5. Select **Browse my computer for drivers**.
-6. Browse to `C:\Users\gsall\Documents\GitHub\TTArmUpdateTool`, make sure **Include subfolders** is selected, and click **Next**.
-7. Allow Windows to install the Silicon Labs driver. Approve the security prompt if one appears, and restart the computer if requested.
-8. Disconnect and reconnect the test box. In **Device Manager**, confirm that **Silicon Labs CP210x USB to UART Bridge (COMx)** appears under **Ports (COM & LPT)**.
+1. Open the [Microsoft Update Catalog CP210x search results](https://www.catalog.update.microsoft.com/Search.aspx?q=cp210x).
+2. Find a **Silicon Laboratories Inc. - Ports** driver that supports your version of Windows, click **Download**, and then click the link in the download window to save the `.cab` file.
+3. Create a new folder for the driver files. Open the downloaded `.cab` file, select all of its contents, and copy them into the new folder.
+4. Connect the test box to the computer.
+5. Right-click the **Start** button and select **Device Manager**.
+6. Find **CP210x USB to UART Bridge**, **USB Serial Controller**, or the unknown device with a warning symbol. It may be listed under **Other devices**.
+7. Right-click the device and select **Update driver**.
+8. Select **Browse my computer for drivers**.
+9. Browse to the folder where you copied the driver files, make sure **Include subfolders** is selected, and click **Next**.
+10. Allow Windows to install the Silicon Labs driver. Approve the security prompt if one appears, and restart the computer if requested.
+11. Disconnect and reconnect the test box. In **Device Manager**, confirm that **Silicon Labs CP210x USB to UART Bridge (COMx)** appears under **Ports (COM & LPT)**.
 
 > [!NOTE]
 > Administrator permission may be required to install the driver.
