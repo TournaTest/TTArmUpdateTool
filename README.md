@@ -25,6 +25,40 @@ Do not extract the firmware files named `TTArm-buildYYYYMMDDx.zip`. The updater 
 
 Everything else needed for the update is included in the downloaded folder.
 
+## Install the CP210x USB Driver
+
+The TournaTest Digital uses a Silicon Labs CP210x USB-to-UART interface. Windows does not include this driver by default, so install it before running the firmware updater. Without the driver, the test box may appear as an unknown device and no COM port will be available.
+
+### Install through Windows Update
+
+1. Connect the test box to the computer with a USB data cable.
+2. Open **Settings**, select **Windows Update**, and click **Check for updates**.
+3. If the driver is not installed automatically, open **Advanced options** > **Optional updates** > **Driver updates**. On some versions of Windows 10, select **View optional updates** instead.
+4. Select the **Silicon Labs CP210x USB to UART Bridge** driver, install it, and then restart the computer if Windows requests it.
+5. Disconnect and reconnect the test box. Confirm that a new COM port appears in **Device Manager** under **Ports (COM & LPT)**.
+
+### Install manually from the project folder
+
+The CP210x driver files may also be installed from:
+
+```text
+C:\Users\gsall\Documents\GitHub\TTArmUpdateTool
+```
+
+If you downloaded this project as a ZIP file on another computer, use the path to your extracted `TTArmUpdateTool` folder instead.
+
+1. Connect the test box to the computer.
+2. Right-click the **Start** button and select **Device Manager**.
+3. Find **CP210x USB to UART Bridge**, **USB Serial Controller**, or the unknown device with a warning symbol. It may be listed under **Other devices**.
+4. Right-click the device and select **Update driver**.
+5. Select **Browse my computer for drivers**.
+6. Browse to `C:\Users\gsall\Documents\GitHub\TTArmUpdateTool`, make sure **Include subfolders** is selected, and click **Next**.
+7. Allow Windows to install the Silicon Labs driver. Approve the security prompt if one appears, and restart the computer if requested.
+8. Disconnect and reconnect the test box. In **Device Manager**, confirm that **Silicon Labs CP210x USB to UART Bridge (COMx)** appears under **Ports (COM & LPT)**.
+
+> [!NOTE]
+> Administrator permission may be required to install the driver.
+
 > [!IMPORTANT]
 > The updater checks that a working TournaTest Digital test box is connected before starting an update. It will not update other connected devices.
 >
