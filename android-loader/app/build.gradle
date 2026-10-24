@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'com.tournatest.loader'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.tournatest.loader'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/firmwareAssets'))
+    lint {
+        abortOnError true
+    }
+}
+// Use the same ZIPs as the Windows updater, without maintaining duplicate source files.
+def bundleFirmware = tasks.register('bundleFirmware', Sync) {
+    from(rootProject.projectDir.parentFile) { include 'TTArm-build*.zip' }
+    into(layout.buildDirectory.dir('generated/firmwareAssets/firmware'))
+    doLast {
+        if (destinationDir.listFiles() == null || destinationDir.listFiles().length == 0) {
+            throw new GradleException('No TTArm-build*.zip firmware found in the repository root.')
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn(bundleFirmware) }
+dependencies {
+    implementation project(':protocol')
+    implementation 'com.github.mik3y:usb-serial-for-android:3.9.0'
+}

@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+dependencies {
+    // Android supplies org.json at runtime; do not package a second copy in the APK.
+    compileOnly 'org.json:json:20240303'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'junit:junit:4.13.2'
+}
+tasks.named('test') {
+    systemProperty 'firmwareRoot', rootProject.projectDir.parentFile.absolutePath
+}
