@@ -58,7 +58,7 @@ public final class LegacyDfu {
         listener.status("Activating firmware — keep the USB cable connected", 97);
         // Preserve the full dual-bank erase/copy delay before any serial close or reset.
         timing.sleep(eraseMs + (long) Math.ceil(pages * 102.4));
-        listener.status("Checking that TournaTest restarted", 99);
+        listener.status("Firmware transfer complete", 99);
     }
 
     private void send(byte[] payload, int timeoutMs) throws IOException, InterruptedException {

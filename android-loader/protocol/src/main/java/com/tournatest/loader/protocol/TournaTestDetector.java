@@ -26,7 +26,7 @@ public final class TournaTestDetector {
                 if (received.length() > 1024) received.delete(0, received.length() - 128);
             }
         }
-        throw new IOException("TournaTest startup message not found. Check the cable and selected device. "
-                + "Only an already-programmed TournaTest can be updated.");
+        throw new IOException("USB opened, but no TTArm startup message was detected within 15 seconds. "
+                + "Enable Force flash to attempt an update without the message check.");
     }
 }

@@ -14,7 +14,7 @@ try {
     if (-not $env:GRADLE_USER_HOME -and (Test-Path -LiteralPath '.build-tools/gradle-home')) {
         $env:GRADLE_USER_HOME = (Resolve-Path -LiteralPath '.build-tools/gradle-home').Path
     }
-    & .\gradlew.bat :protocol:test :app:assembleDebug :app:lintDebug --console=plain
+    & .\gradlew.bat :protocol:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
     if ($LASTEXITCODE -ne 0) { throw "Android validation failed (exit $LASTEXITCODE)." }
     $loaderApk = Join-Path $PSScriptRoot 'TournaTest-Updater-debug.apk'
     Copy-Item -LiteralPath 'app/build/outputs/apk/debug/app-debug.apk' -Destination $loaderApk -Force

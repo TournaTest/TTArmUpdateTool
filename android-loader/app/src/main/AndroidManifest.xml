@@ -14,7 +14,7 @@
         android:icon="@drawable/ic_update"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -25,6 +25,7 @@
             <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <receiver android:name=".UsbPermissionReceiver" android:exported="false" />
         <!-- USB permission satisfies connectedDevice's runtime prerequisite. AGP 8.9's
              manifest lint only checks its Bluetooth/network permission alternatives.
              https://developer.android.com/about/versions/14/changes/fgs-types-required#connected-device -->

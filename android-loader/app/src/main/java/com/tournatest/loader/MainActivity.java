@@ -21,13 +21,16 @@ import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -44,13 +47,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.UUID;
 
 // This first release is English-only. All operational messages also appear in the update log.
 @SuppressLint("SetTextI18n")
 public final class MainActivity extends Activity {
     private static final int PICK_ZIP = 10;
     private static final int NOTIFICATIONS = 11;
-    private static final String USB_PERMISSION = "com.tournatest.loader.USB_PERMISSION";
     private static final int INK = Color.rgb(26, 48, 45);
     private static final int MUTED = Color.rgb(84, 104, 100);
     private final ArrayList<FirmwareChoice> firmwareChoices = new ArrayList<>();
@@ -63,11 +66,14 @@ public final class MainActivity extends Activity {
     private Button update;
     private Button confirm;
     private Button cancel;
+    private Button anotherBox;
     private Button copy;
     private TextView status;
     private TextView details;
+    private TextView usbStatus;
     private TextView log;
     private ProgressBar progress;
+    private CheckBox forceFlash;
     private UsbManager usbManager;
     private UpdateService service;
     private boolean bound;
@@ -76,10 +82,22 @@ public final class MainActivity extends Activity {
     private boolean permissionPending;
     private boolean notificationPending;
     private boolean notificationRequested;
+    private Uri pendingPermissionToken;
+    private boolean pendingForceFlash;
     private String pendingDevice;
     private String pendingFirmware;
     private String pendingName;
     private boolean readyToStart;
+    private final StringBuilder connectionLog = new StringBuilder();
+    private String usbInventory = "";
+    private final Handler usbRefresh = new Handler(Looper.getMainLooper());
+    private final Runnable rescan = new Runnable() {
+        @Override public void run() {
+            if (!resumed) return;
+            scanDevices();
+            usbRefresh.postDelayed(this, 2000);
+        }
+    };
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -95,23 +113,10 @@ public final class MainActivity extends Activity {
 
     private final BroadcastReceiver usbEvents = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (USB_PERMISSION.equals(intent.getAction())) {
-                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                if (!permissionPending || device == null || !device.getDeviceName().equals(pendingDevice)) return;
-                permissionPending = false;
-                if (usbManager.hasPermission(device)) {
-                    readyToStart = true;
-                    startWhenResumed();
-                } else {
-                    status.setText("USB access was denied. Tap Connect and Update to try again.");
-                    refreshControls();
-                }
+            if (UsbPermissionReceiver.RESULT_CHANGED.equals(intent.getAction())) {
+                reconcileUsbPermission();
             } else {
                 scanDevices();
-                if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())
-                        && service != null && service.state().busy()) {
-                    status.setText("USB connection changed. Keep the test box connected while the updater checks it.");
-                }
             }
         }
     };
@@ -127,8 +132,13 @@ public final class MainActivity extends Activity {
             notificationPending = saved.getBoolean("notificationPending");
             notificationRequested = saved.getBoolean("notificationRequested");
             readyToStart = saved.getBoolean("readyToStart");
+            pendingForceFlash = saved.getBoolean("pendingForceFlash");
+            String token = saved.getString("pendingPermissionToken");
+            pendingPermissionToken = token == null ? null : Uri.parse(token);
+            connectionLog.append(saved.getString("connectionLog", ""));
         }
         buildUi();
+        forceFlash.setChecked(saved != null && saved.getBoolean("forceFlash"));
         loadFirmwareChoices(saved);
         scanDevices();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_USB_HOST)) {
@@ -178,8 +188,17 @@ public final class MainActivity extends Activity {
         deviceSpinner.setAdapter(deviceAdapter);
         content.addView(deviceSpinner, fill());
         scan = button(content, "Scan USB devices");
-        scan.setOnClickListener(view -> scanDevices());
-        text(content, "Only CP210x devices are listed. The updater checks for a working TournaTest before writing firmware.", 14, MUTED);
+        scan.setOnClickListener(view -> {
+            if (permissionPending && !notificationPending) clearPendingUsbRequest();
+            scanDevices();
+        });
+        usbStatus = text(content, "", 14, MUTED);
+        text(content, "Select the connected test box. USB access is requested separately for each box.", 14, MUTED);
+        forceFlash = new CheckBox(this);
+        forceFlash.setText("Force flash (skip TTArm message check)");
+        forceFlash.setTextColor(INK);
+        forceFlash.setMinHeight(dp(52));
+        content.addView(forceFlash, fill());
 
         section(content, "3  Connect and update");
         update = button(content, "Connect and Update");
@@ -197,8 +216,9 @@ public final class MainActivity extends Activity {
         confirm.setOnClickListener(view -> {
             if (service == null || service.state().phase != UpdateService.Phase.CONFIRM) return;
             UpdateService.State state = service.state();
-            new AlertDialog.Builder(this).setTitle("Update TournaTest?")
-                    .setMessage(state.firmware + "\n\nKeep the phone and test box powered and the USB cable connected until the update finishes.")
+            new AlertDialog.Builder(this).setTitle(state.forceFlash ? "Force flash TournaTest?" : "Update TournaTest?")
+                    .setMessage(state.firmware + (state.forceFlash ? "\n\nTTArm startup-message checks will be skipped." : "")
+                            + "\n\nKeep the phone and test box powered and the USB cable connected until the update finishes.")
                     .setNegativeButton("Go back", null)
                     .setPositiveButton("Install", (dialog, which) -> {
                         if (service != null) service.confirm();
@@ -207,6 +227,9 @@ public final class MainActivity extends Activity {
         cancel = button(content, "Cancel");
         cancel.setVisibility(View.GONE);
         cancel.setOnClickListener(view -> { if (service != null) service.cancelConfirmation(); });
+        anotherBox = button(content, "Flash another box");
+        anotherBox.setVisibility(View.GONE);
+        anotherBox.setOnClickListener(view -> flashAnotherBox());
         text(content, "Keep the USB cable connected until the update finishes. Use firmware supplied by a trusted TournaTest source.", 14, MUTED);
         section(content, "Update log");
         log = text(content, "Update messages will appear here.", 13, MUTED);
@@ -264,21 +287,57 @@ public final class MainActivity extends Activity {
     private void scanDevices() {
         DeviceChoice selected = (DeviceChoice) deviceSpinner.getSelectedItem();
         String previous = selected == null ? null : selected.device.getDeviceName();
-        devices.clear();
+        ArrayList<DeviceChoice> found = new ArrayList<>();
+        int totalDevices = 0;
+        StringBuilder inventory = new StringBuilder();
         if (usbManager != null) {
-            for (UsbSerialDriver driver : UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)) {
-                if (driver instanceof Cp21xxSerialDriver && driver.getPorts().size() == 1) devices.add(new DeviceChoice(driver.getDevice()));
+            ArrayList<UsbDevice> attached = new ArrayList<>(usbManager.getDeviceList().values());
+            attached.sort(Comparator.comparing(UsbDevice::getDeviceName));
+            totalDevices = attached.size();
+            inventory.append("USB devices: ").append(totalDevices);
+            for (UsbDevice device : attached) {
+                inventory.append(String.format(Locale.ROOT, "\nUSB %04X:%04X · %s · %s",
+                        device.getVendorId(), device.getProductId(), device.getDeviceName(),
+                        usbManager.hasPermission(device) ? "access granted" : "access required"));
+                UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+                if (driver instanceof Cp21xxSerialDriver && driver.getPorts().size() == 1) {
+                    found.add(new DeviceChoice(driver.getDevice(), usbManager.hasPermission(driver.getDevice())));
+                }
             }
         }
-        devices.sort(Comparator.comparing(choice -> choice.device.getDeviceName()));
-        deviceAdapter.notifyDataSetChanged();
-        for (int i = 0; i < devices.size(); i++) {
-            if (devices.get(i).device.getDeviceName().equals(previous)) deviceSpinner.setSelection(i);
+        found.sort(Comparator.comparing(choice -> choice.device.getDeviceName()));
+        boolean changed = !inventory.toString().equals(usbInventory);
+        if (changed) {
+            usbInventory = inventory.toString();
+            devices.clear();
+            devices.addAll(found);
+            deviceAdapter.notifyDataSetChanged();
+            for (int i = 0; i < devices.size(); i++) {
+                if (devices.get(i).device.getDeviceName().equals(previous)) deviceSpinner.setSelection(i);
+            }
+            connectionMessage(usbInventory);
         }
-        if (devices.isEmpty() && (service == null || !service.state().busy())) {
-            status.setText("No CP210x USB device found. Connect the test box, then scan again.");
+        usbStatus.setText(devices.isEmpty() ? (totalDevices == 0 ? "No USB devices detected."
+                : "USB device detected, but no supported CP210x interface found.")
+                : devices.size() + " test box interface(s) connected. Access status is shown above.");
+        if (changed && (service == null || !service.state().busy())) {
+            status.setText(devices.isEmpty() ? "Connect the test box, then scan again."
+                    : "Test box connected. Tap Connect and Update.");
         }
+        reconcileUsbPermission();
         refreshControls();
+    }
+
+    private void connectionMessage(String message) {
+        connectionLog.append(message).append('\n');
+        if (connectionLog.length() > 8000) connectionLog.delete(0, connectionLog.length() - 6000);
+        showLog();
+    }
+
+    private void showLog() {
+        String updateLog = service == null ? "" : service.state().log;
+        String combined = connectionLog.toString() + updateLog;
+        log.setText(combined.isEmpty() ? "Update messages will appear here." : combined);
     }
 
     private void requestUpdate() {
@@ -289,6 +348,7 @@ public final class MainActivity extends Activity {
         pendingDevice = device.device.getDeviceName();
         pendingFirmware = firmware.reference;
         pendingName = firmware.name;
+        pendingForceFlash = forceFlash.isChecked();
         if (Build.VERSION.SDK_INT >= 33 && !notificationRequested
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationRequested = true;
@@ -310,16 +370,86 @@ public final class MainActivity extends Activity {
             return;
         }
         if (usbManager.hasPermission(device)) {
+            permissionPending = false;
+            pendingPermissionToken = null;
+            connectionMessage("USB access already granted for " + pendingDevice);
             readyToStart = true;
             startWhenResumed();
         } else {
             permissionPending = true;
-            Intent result = new Intent(USB_PERMISSION).setPackage(getPackageName());
+            pendingPermissionToken = Uri.parse("tournatest-loader://usb-permission/" + UUID.randomUUID());
+            Intent result = new Intent(this, UsbPermissionReceiver.class).setAction(UsbPermissionReceiver.ACTION)
+                    .setData(pendingPermissionToken);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE; // UsbManager supplies result extras.
             PendingIntent permission = PendingIntent.getBroadcast(this, 0, result, flags);
             status.setText("Allow this app to access the TournaTest USB interface.");
-            usbManager.requestPermission(device, permission);
+            connectionMessage("Requesting USB access for " + pendingDevice);
+            try {
+                usbManager.requestPermission(device, permission);
+            } catch (RuntimeException e) {
+                clearPendingUsbRequest();
+                status.setText("Cannot request USB access: " + e.getMessage());
+                connectionMessage(status.getText().toString());
+            }
+        }
+        refreshControls();
+    }
+
+    private void clearPendingUsbRequest() {
+        permissionPending = false;
+        readyToStart = false;
+        pendingPermissionToken = null;
+    }
+
+    private void flashAnotherBox() {
+        if (service == null || service.state().busy() || permissionPending || notificationPending || readyToStart) return;
+        // Cancel any old callback before forgetting its token; a late result must not start work.
+        if (pendingPermissionToken != null) {
+            Intent result = new Intent(this, UsbPermissionReceiver.class).setAction(UsbPermissionReceiver.ACTION)
+                    .setData(pendingPermissionToken);
+            int flags = PendingIntent.FLAG_NO_CREATE;
+            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+            PendingIntent pending = PendingIntent.getBroadcast(this, 0, result, flags);
+            if (pending != null) pending.cancel();
+        }
+        clearPendingUsbRequest();
+        notificationPending = false;
+        pendingDevice = null;
+        pendingFirmware = null;
+        pendingName = null;
+        pendingForceFlash = false;
+        UsbPermissionReceiver.clearResults(this);
+        connectionLog.setLength(0);
+        usbInventory = "";
+        devices.clear();
+        deviceAdapter.notifyDataSetChanged();
+        if (!service.resetForNextBox()) return;
+        scanDevices();
+        // Keep the selected ZIP and force-mode preference for repeated updates of the same batch.
+        status.setText(service.state().message);
+    }
+
+    private void reconcileUsbPermission() {
+        if (!permissionPending || notificationPending || pendingDevice == null) return;
+        UsbDevice device = usbManager.getDeviceList().get(pendingDevice);
+        if (device == null) {
+            clearPendingUsbRequest();
+            status.setText("Test box disconnected. Connect the next box and try again.");
+            connectionMessage("USB device disconnected while permission was pending.");
+        } else {
+            boolean completed = UsbPermissionReceiver.consume(this, pendingPermissionToken);
+            boolean granted = usbManager.hasPermission(device);
+            if (!completed && !granted) return; // Resuming alone does not mean a permission request failed.
+            permissionPending = false;
+            pendingPermissionToken = null;
+            connectionMessage((granted ? "USB access granted for " : "USB access denied for ") + pendingDevice);
+            if (granted) {
+                readyToStart = true;
+                startWhenResumed();
+            } else {
+                status.setText("USB access was denied. Tap Connect and Update to try again.");
+            }
         }
         refreshControls();
     }
@@ -345,10 +475,12 @@ public final class MainActivity extends Activity {
             return;
         }
         Intent start = new Intent(this, UpdateService.class).putExtra(UpdateService.DEVICE, pendingDevice)
-                .putExtra(UpdateService.FIRMWARE, pendingFirmware).putExtra(UpdateService.NAME, pendingName);
+                .putExtra(UpdateService.FIRMWARE, pendingFirmware).putExtra(UpdateService.NAME, pendingName)
+                .putExtra(UpdateService.FORCE_FLASH, pendingForceFlash);
         try {
             startForegroundService(start);
             update.setEnabled(false);
+            anotherBox.setVisibility(View.GONE);
         } catch (RuntimeException e) {
             status.setText("Cannot start the updater: " + e.getMessage());
             refreshControls();
@@ -356,18 +488,23 @@ public final class MainActivity extends Activity {
     }
 
     private void render(UpdateService.State state) {
-        if (state.phase != UpdateService.Phase.IDLE) status.setText(state.message);
+        status.setText(state.message);
         progress.setProgress(state.percent);
         progress.setIndeterminate(state.phase == UpdateService.Phase.CHECKING);
         boolean review = state.phase == UpdateService.Phase.CONFIRM;
+        confirm.setText(state.forceFlash ? "Force flash this firmware" : "Install this firmware");
         confirm.setVisibility(review ? View.VISIBLE : View.GONE);
         cancel.setVisibility(review ? View.VISIBLE : View.GONE);
+        anotherBox.setVisibility(state.finished() ? View.VISIBLE : View.GONE);
         if (!state.hash.isEmpty()) {
             details.setVisibility(View.VISIBLE);
             details.setText(state.firmware + "\n" + String.format(Locale.ROOT, "%,d bytes", state.size)
                     + "\nUSB: " + state.device + "\nApplication SHA-256:\n" + state.hash);
+        } else {
+            details.setText("");
+            details.setVisibility(View.GONE);
         }
-        log.setText(state.log.isEmpty() ? "Update messages will appear here." : state.log);
+        showLog();
         if (state.busy()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         refreshControls();
@@ -379,7 +516,9 @@ public final class MainActivity extends Activity {
         firmwareSpinner.setEnabled(!busy);
         deviceSpinner.setEnabled(!busy);
         browse.setEnabled(!busy);
-        scan.setEnabled(!busy);
+        forceFlash.setEnabled(!busy);
+        anotherBox.setEnabled(!busy && service != null);
+        scan.setEnabled(!notificationPending && !readyToStart && (service == null || !service.state().busy()));
         update.setEnabled(!busy && service != null && !devices.isEmpty() && !firmwareChoices.isEmpty()
                 && getPackageManager().hasSystemFeature(PackageManager.FEATURE_USB_HOST));
     }
@@ -388,7 +527,7 @@ public final class MainActivity extends Activity {
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override protected void onStart() {
         super.onStart();
-        IntentFilter filter = new IntentFilter(USB_PERMISSION);
+        IntentFilter filter = new IntentFilter(UsbPermissionReceiver.RESULT_CHANGED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbEvents, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -401,17 +540,24 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
-        if (permissionPending && !notificationPending && pendingDevice != null) {
-            UsbDevice device = usbManager.getDeviceList().get(pendingDevice);
-            permissionPending = false;
-            if (device != null && usbManager.hasPermission(device)) readyToStart = true;
-            else status.setText("USB access was not granted. Tap Connect and Update to try again.");
-        }
+        scanDevices();
         startWhenResumed();
         refreshControls();
+        usbRefresh.removeCallbacks(rescan);
+        usbRefresh.postDelayed(rescan, 2000);
     }
 
-    @Override protected void onPause() { resumed = false; super.onPause(); }
+    @Override protected void onPause() {
+        resumed = false;
+        usbRefresh.removeCallbacks(rescan);
+        super.onPause();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        scanDevices();
+    }
 
     @Override protected void onStop() {
         if (service != null) service.observe(null);
@@ -432,6 +578,10 @@ public final class MainActivity extends Activity {
         out.putBoolean("notificationPending", notificationPending);
         out.putBoolean("notificationRequested", notificationRequested);
         out.putBoolean("readyToStart", readyToStart);
+        out.putBoolean("forceFlash", forceFlash.isChecked());
+        out.putBoolean("pendingForceFlash", pendingForceFlash);
+        out.putString("pendingPermissionToken", pendingPermissionToken == null ? null : pendingPermissionToken.toString());
+        out.putString("connectionLog", connectionLog.toString());
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
@@ -488,9 +638,11 @@ public final class MainActivity extends Activity {
     }
     private static final class DeviceChoice {
         final UsbDevice device;
-        DeviceChoice(UsbDevice device) { this.device = device; }
+        final boolean permission;
+        DeviceChoice(UsbDevice device, boolean permission) { this.device = device; this.permission = permission; }
         @Override public String toString() {
-            return String.format(Locale.ROOT, "CP210x %04X:%04X · USB %d", device.getVendorId(), device.getProductId(), device.getDeviceId());
+            return String.format(Locale.ROOT, "CP210x · USB %d · %s", device.getDeviceId(),
+                    permission ? "access granted" : "access required");
         }
     }
 }

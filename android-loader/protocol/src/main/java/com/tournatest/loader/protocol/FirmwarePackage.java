@@ -102,7 +102,11 @@ public final class FirmwarePackage {
                 throw new IOException("Firmware CRC check failed. Download the ZIP again.");
             }
             return new FirmwarePackage(name, binary, init);
-        } catch (JSONException | IllegalArgumentException e) {
+        // Android's JSONException extends Exception; the JVM library's extends RuntimeException.
+        // Separate handlers keep the class valid with both implementations.
+        } catch (JSONException e) {
+            throw new IOException("Invalid firmware manifest or DFU init packet.", e);
+        } catch (IllegalArgumentException e) {
             throw new IOException("Invalid firmware manifest or DFU init packet.", e);
         }
     }
