@@ -12,5 +12,6 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 tasks.named('test') {
-    systemProperty 'firmwareRoot', rootProject.projectDir.parentFile.absolutePath
+    systemProperty 'firmwareRoot', new File(rootProject.projectDir.parentFile, 'releases').absolutePath
+    inputs.files(fileTree(new File(rootProject.projectDir.parentFile, 'releases')) { include 'TTArm*.zip' })
 }

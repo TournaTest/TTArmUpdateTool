@@ -14,13 +14,15 @@ try {
     if (-not $env:GRADLE_USER_HOME -and (Test-Path -LiteralPath '.build-tools/gradle-home')) {
         $env:GRADLE_USER_HOME = (Resolve-Path -LiteralPath '.build-tools/gradle-home').Path
     }
-    & .\gradlew.bat :protocol:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
+    & .\gradlew.bat :protocol:test :app:testDebugUnitTest :app:assembleRelease :app:lintRelease --console=plain
     if ($LASTEXITCODE -ne 0) { throw "Android validation failed (exit $LASTEXITCODE)." }
-    $loaderApk = Join-Path $PSScriptRoot 'TournaTest-Updater-debug.apk'
-    Copy-Item -LiteralPath 'app/build/outputs/apk/debug/app-debug.apk' -Destination $loaderApk -Force
+    $loaderOutput = Join-Path $PSScriptRoot '../releases/android'
+    New-Item -ItemType Directory -Path $loaderOutput -Force | Out-Null
+    $loaderApk = Join-Path $loaderOutput 'TournaTest-Updater-beta.apk'
+    Copy-Item -LiteralPath 'app/build/outputs/apk/release/app-release.apk' -Destination $loaderApk -Force
     $loaderHash = (Get-FileHash -LiteralPath $loaderApk -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath "$loaderApk.sha256" -Value "$loaderHash  TournaTest-Updater-debug.apk" -Encoding ascii
-    Write-Host "Validated APK: $loaderApk"
+    Set-Content -LiteralPath "$loaderApk.sha256" -Value "$loaderHash  TournaTest-Updater-beta.apk" -Encoding ascii
+    Write-Host "Validated beta APK (debug signing key): $loaderApk"
 } finally {
     Pop-Location
 }

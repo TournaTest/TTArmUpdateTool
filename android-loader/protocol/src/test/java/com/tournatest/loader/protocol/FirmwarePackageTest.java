@@ -19,7 +19,7 @@ import java.util.zip.ZipOutputStream;
 import static org.junit.Assert.*;
 
 public class FirmwarePackageTest {
-    static final String LATEST = "TTArm-build20260629d.zip";
+    static final String LATEST = "TTArm_nrf52832-build20260629d.zip";
 
     static FirmwarePackage realFirmware() throws IOException {
         try (InputStream input = Files.newInputStream(Path.of(System.getProperty("firmwareRoot"), LATEST))) {
@@ -30,7 +30,7 @@ public class FirmwarePackageTest {
     @Test public void allShippedFirmwarePackagesPassValidation() throws Exception {
         int count = 0;
         try (var paths = Files.list(Path.of(System.getProperty("firmwareRoot")))) {
-            for (Path file : paths.filter(path -> path.getFileName().toString().matches("TTArm-build.*\\.zip")).toList()) {
+            for (Path file : paths.filter(path -> path.getFileName().toString().matches("TTArm.*\\.zip")).toList()) {
                 try (InputStream input = Files.newInputStream(file)) {
                     FirmwarePackage firmware = FirmwarePackage.read(file.getFileName().toString(), input);
                     assertTrue(firmware.size() > 100_000);
@@ -39,7 +39,7 @@ public class FirmwarePackageTest {
                 }
             }
         }
-        assertTrue("Tests must exercise actual distributed firmware", count >= 3);
+        assertTrue("Tests must exercise actual distributed firmware", count >= 5);
     }
 
     @Test public void packageDoesNotExposeMutableFirmware() throws Exception {

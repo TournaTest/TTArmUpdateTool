@@ -2,8 +2,9 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # === Utility Functions ===
+$FirmwareDirectory = Join-Path $PSScriptRoot 'releases'
 function Get-LatestZipFiles {
-    Get-ChildItem -Path . -Filter *.zip | Sort-Object LastWriteTime -Descending
+    Get-ChildItem -LiteralPath $FirmwareDirectory -Filter 'TTArm*.zip' -File | Sort-Object LastWriteTime -Descending
 }
 
 function Get-ComPorts {
@@ -119,7 +120,7 @@ $form.Controls.Add($textOutput)
 
 # === Update Action ===
 $buttonUpdate.Add_Click({
-    $selectedZip = $comboZip.SelectedItem
+    $selectedZip = Join-Path $FirmwareDirectory ([string]$comboZip.SelectedItem)
     $selectedCom = $comboCom.SelectedItem
 
     # Reset the status text area
@@ -247,7 +248,7 @@ $buttonUpdate.Add_Click({
 
 
     # 2. START PROCESS (Non-blocking)
-    $process = Start-Process "cmd" -ArgumentList "/c", $cmdToRun -NoNewWindow -PassThru -Wait:$false
+    $process = Start-Process "cmd" -ArgumentList "/c", $cmdToRun -WorkingDirectory $PSScriptRoot -NoNewWindow -PassThru -Wait:$false
     #$process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $DFUCommand" -RedirectStandardOutput $LogFile -NoNewWindow -PassThru -Wait:$false
 
     $textOutput.AppendText("--- DFU Output (Live Stream) ---" + $NL)

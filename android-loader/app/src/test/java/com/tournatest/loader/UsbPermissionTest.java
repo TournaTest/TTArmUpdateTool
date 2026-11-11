@@ -73,6 +73,20 @@ public class UsbPermissionTest {
         if (service != null) service.destroy();
     }
 
+    @Test public void bundledFirmwareIncludesBothBoardsWithVersionedReleasesFirst() throws Exception {
+        Spinner choices = field("firmwareSpinner", Spinner.class);
+        assertEquals(5, choices.getCount());
+        assertEquals("TTArm_1.2-1.7_feather52840_9fa7f9c_BLE.zip", choices.getItemAtPosition(0).toString());
+        assertEquals("TTArm_1.2-1.7_feather52832_9fa7f9c_BLE.zip", choices.getItemAtPosition(1).toString());
+        assertEquals("TTArm_nrf52832-build20260629d.zip", choices.getItemAtPosition(2).toString());
+        for (int i = 0; i < choices.getCount(); i++) {
+            String name = choices.getItemAtPosition(i).toString();
+            try (java.io.InputStream input = app.getAssets().open("firmware/" + name)) {
+                assertTrue(FirmwarePackage.read(name, input).size() > 100_000);
+            }
+        }
+    }
+
     @Test public void resumeBeforeDelayedPermissionResultDoesNotDiscardRequest() throws Exception {
         field("forceFlash", CheckBox.class).setChecked(true);
         requestUpdate();
@@ -292,7 +306,7 @@ public class UsbPermissionTest {
 
     private void completedSession(UpdateService.Phase phase, boolean force) throws Exception {
         FirmwarePackage firmware;
-        try (java.io.InputStream input = app.getAssets().open("firmware/TTArm-build20260629d.zip")) {
+        try (java.io.InputStream input = app.getAssets().open("firmware/TTArm_nrf52832-build20260629d.zip")) {
             firmware = FirmwarePackage.read("firmware.zip", input);
         }
         ReflectionHelpers.setField(service.get(), "firmware", firmware);

@@ -6,16 +6,20 @@ Use this Windows updater to install firmware on a TournaTest Digital test box.
 
 For complete instructions for using the test box, see the [TournaTest Digital User's Guide](TournaTest%20Digital%20User's%20Guide.pdf).
 
-## Download the Updater from GitHub
+## Android beta
+
+Install [TournaTest-Updater-beta.apk](releases/android/TournaTest-Updater-beta.apk) on your phone. This is the current Android download, signed with the existing debug key. It includes the firmware files. See the [Android instructions](android-loader/README.md) for setup and use.
+
+## Download the Windows Updater from GitHub
 
 1. Open this project's main GitHub page.
 2. Find the green **Code** button above the file list and click it.
 3. Click **Download ZIP** in the menu.
 4. When the download finishes, open your **Downloads** folder.
 5. Right-click the downloaded ZIP file, select **Extract All**, and then click **Extract**.
-6. Open the extracted folder. It should contain `TTArmUpdate.bat`, `TTArmUpdate.ps1`, `adafruit-nrfutil.exe`, and one or more firmware ZIP files.
+6. Open the extracted folder. It should contain `TTArmUpdate.bat`, `TTArmUpdate.ps1`, `adafruit-nrfutil.exe`, and a `releases` folder containing the firmware ZIP files.
 
-Do not extract the firmware files named `TTArm-buildYYYYMMDDx.zip`. The updater uses those files in ZIP form.
+Do not extract the firmware files in `releases/`. The updater uses those files in ZIP form.
 
 ## What You Need
 
@@ -69,7 +73,7 @@ If Windows Update does not offer the driver automatically:
 2. Connect the test box directly to the computer with a USB data cable. The test box will automatically power on and remain on while USB is connected.
 3. Wait for Windows to recognize the test box.
 4. Double-click `TTArmUpdate.bat` in the extracted folder.
-5. Select the newest firmware build unless you were told to use another version.
+5. Select the newest firmware build for the test box's board (nRF52832 or nRF52840), unless you were told to use another version. The updater does not automatically identify the board model.
 6. Select the test box's COM port.
 7. Click **Connect and Update**.
 8. Check the firmware filename and COM port in the confirmation message, and then continue.
@@ -83,13 +87,15 @@ The test box may disconnect and reconnect during the update. This is normal.
 
 ## Firmware Builds
 
-Newest builds are listed first.
+Firmware ZIPs are stored in `releases/`. Choose the file for the test box's board.
 
 | Firmware build | Date | Main change |
 |---|---|---|
-| `TTArm-build20260629d.zip` | June 29, 2026 | Changes the cable-detection threshold to 1 ohm. |
-| `TTArm-build20251130d.zip` | November 30, 2025 | Improves AC-short detection on affected test boxes. |
-| `TTArm-build20251105d.zip` | November 5, 2025 | Adds the menu system and display improvements. |
+| `TTArm_1.2-1.7_feather52832_9fa7f9c_BLE.zip` | Version 1.2–1.7 | Feather nRF52832 release. |
+| `TTArm_1.2-1.7_feather52840_9fa7f9c_BLE.zip` | Version 1.2–1.7 | Feather nRF52840 release. |
+| `TTArm_nrf52832-build20260629d.zip` | June 29, 2026 | Changes the cable-detection threshold to 1 ohm. |
+| `TTArm_nrf52832-build20251130d.zip` | November 30, 2025 | Improves AC-short detection on affected test boxes. |
+| `TTArm_nrf52832-build20251105d.zip` | November 5, 2025 | Adds the menu system and display improvements. |
 
 ## Finding the Correct COM Port
 
@@ -130,7 +136,7 @@ Run `TTArmUpdate.bat`, not `TTArmUpdate.ps1`. If Windows shows an **Unblock** op
 
 ### The update fails
 
-- Make sure all updater files and the selected firmware ZIP are in the same extracted folder.
+- Make sure the updater files are in the extracted folder and the selected firmware ZIP is in its `releases` subfolder.
 - Do not run the updater from inside the downloaded ZIP file.
 - Reconnect the test box and try again.
 - Record the message and exit code shown in the updater if you need help.

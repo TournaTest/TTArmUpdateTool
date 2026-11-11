@@ -260,7 +260,9 @@ public final class MainActivity extends Activity {
         try {
             String[] names = getAssets().list("firmware");
             if (names != null) {
-                Arrays.sort(names, Comparator.reverseOrder());
+                // Versioned releases precede the older date-based builds.
+                Arrays.sort(names, Comparator.comparing((String name) -> name.contains("-build"))
+                        .thenComparing(Comparator.reverseOrder()));
                 for (String name : names) if (name.endsWith(".zip")) firmwareChoices.add(new FirmwareChoice(name, "asset:" + name));
             }
         } catch (IOException e) {
